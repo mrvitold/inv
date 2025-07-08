@@ -55,6 +55,7 @@ import java.util.Locale
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.navigationBarsPadding
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
@@ -293,21 +294,28 @@ fun DetailScreen(invoiceId: String?, navController: NavHostController) {
                 .fillMaxSize()
                 .padding(innerPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
         ) {
             Image(
                 painter = rememberAsyncImagePainter(invoice.uri),
                 contentDescription = "Invoice image",
                 modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = "Uploaded: ${invoice.uploadDate}")
-            Button(onClick = {
-                removeInvoiceItems(context, listOf(invoice.id))
-                navController.popBackStack()
-            }) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete")
-                Text("Delete Invoice")
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(text = "Uploaded: ${invoice.uploadDate}")
+                Button(onClick = {
+                    removeInvoiceItems(context, listOf(invoice.id))
+                    navController.popBackStack()
+                }, modifier = Modifier.padding(top = 8.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    Text("Delete Invoice")
+                }
             }
         }
     }
