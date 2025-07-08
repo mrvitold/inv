@@ -52,11 +52,13 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
 
-data class InvoiceItem(val uri: String, val uploadDate: String)
+data class InvoiceItem(val id: String, val uri: String, val uploadDate: String)
 
 fun saveInvoiceItem(context: Context, uri: String) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -64,20 +66,21 @@ fun saveInvoiceItem(context: Context, uri: String) {
     val list = JSONArray(listJson)
     val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
     val obj = JSONObject()
+    obj.put("id", System.currentTimeMillis().toString())
     obj.put("uri", uri)
     obj.put("uploadDate", date)
     list.put(obj)
     prefs.edit { putString(KEY_IMAGE_LIST, list.toString()) }
 }
 
-fun removeInvoiceItems(context: Context, uris: List<String>) {
+fun removeInvoiceItems(context: Context, ids: List<String>) {
     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     val listJson = prefs.getString(KEY_IMAGE_LIST, "[]") ?: "[]"
     val list = JSONArray(listJson)
     val newList = JSONArray()
     for (i in 0 until list.length()) {
         val obj = list.getJSONObject(i)
-        if (!uris.contains(obj.getString("uri"))) {
+        if (!ids.contains(obj.getString("id"))) {
             newList.put(obj)
         }
     }
@@ -91,7 +94,11 @@ fun getInvoiceItems(context: Context): List<InvoiceItem> {
     val result = mutableListOf<InvoiceItem>()
     for (i in 0 until list.length()) {
         val obj = list.getJSONObject(i)
-        result.add(InvoiceItem(obj.getString("uri"), obj.getString("uploadDate")))
+        result.add(InvoiceItem(
+            obj.optString("id", System.currentTimeMillis().toString()),
+            obj.getString("uri"),
+            obj.getString("uploadDate")
+        ))
     }
     return result
 }
@@ -109,9 +116,9 @@ class MainActivity : ComponentActivity() {
                 ) {
                     composable("main") { MainScreen(navController) }
                     composable("gallery") { GalleryScreen(navController) }
-                    composable("detail/{imageUri}") { backStackEntry ->
-                        val imageUri = backStackEntry.arguments?.getString("imageUri")
-                        DetailScreen(imageUri, navController)
+                    composable("detail/{invoiceId}") { backStackEntry ->
+                        val invoiceId = backStackEntry.arguments?.getString("invoiceId")
+                        DetailScreen(invoiceId, navController)
                     }
                 }
             }
@@ -159,14 +166,14 @@ fun MainScreen(navController: NavHostController) {
 fun GalleryScreen(navController: NavHostController) {
     val context = LocalContext.current
     var invoiceItems by remember { mutableStateOf(getInvoiceItems(context)) }
-    var selectedUris by remember { mutableStateOf(setOf<String>()) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Gallery") },
                 actions = {
-                    if (selectedUris.isNotEmpty()) {
+                    if (selectedIds.isNotEmpty()) {
                         Icon(
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete Selected",
@@ -193,9 +200,9 @@ fun GalleryScreen(navController: NavHostController) {
                         text = { Text("Are you sure you want to delete the selected invoices?") },
                         confirmButton = {
                             Button(onClick = {
-                                removeInvoiceItems(context, selectedUris.toList())
+                                removeInvoiceItems(context, selectedIds.toList())
                                 invoiceItems = getInvoiceItems(context)
-                                selectedUris = emptySet()
+                                selectedIds = emptySet()
                                 showDeleteDialog = false
                             }) { Text("Delete") }
                         },
@@ -207,33 +214,36 @@ fun GalleryScreen(navController: NavHostController) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(invoiceItems) { item ->
+                    items(invoiceItems, key = { it.id }) { item ->
                         androidx.compose.foundation.layout.Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
-                                .clickable {
-                                    if (selectedUris.isNotEmpty()) {
-                                        selectedUris = if (selectedUris.contains(item.uri))
-                                            selectedUris - item.uri else selectedUris + item.uri
-                                    } else {
-                                        navController.navigate("detail/${Uri.encode(item.uri)}")
-                                    }
-                                }
-                                .padding(8.dp)
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp, horizontal = 16.dp)
                         ) {
                             androidx.compose.material.Checkbox(
-                                checked = selectedUris.contains(item.uri),
+                                checked = selectedIds.contains(item.id),
                                 onCheckedChange = { checked ->
-                                    selectedUris = if (checked) selectedUris + item.uri else selectedUris - item.uri
-                                }
+                                    selectedIds = if (checked) selectedIds + item.id else selectedIds - item.id
+                                },
+                                modifier = Modifier.padding(end = 8.dp)
                             )
-                            Image(
-                                painter = rememberAsyncImagePainter(item.uri),
-                                contentDescription = "Invoice thumbnail",
-                                modifier = Modifier.height(64.dp)
-                            )
-                            Column(modifier = Modifier.padding(start = 8.dp)) {
-                                Text(text = "Uploaded: ${item.uploadDate}", modifier = Modifier)
+                            androidx.compose.foundation.layout.Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        navController.navigate("detail/${Uri.encode(item.id)}")
+                                    }
+                            ) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(item.uri),
+                                    contentDescription = "Invoice thumbnail",
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .padding(end = 16.dp)
+                                )
+                                Text(text = "Uploaded: ${item.uploadDate}")
                             }
                         }
                     }
@@ -244,9 +254,10 @@ fun GalleryScreen(navController: NavHostController) {
 }
 
 @Composable
-fun DetailScreen(imageUri: String?, navController: NavHostController) {
+fun DetailScreen(invoiceId: String?, navController: NavHostController) {
     val context = LocalContext.current
-    if (imageUri == null) {
+    val invoice = getInvoiceItems(context).find { it.id == invoiceId }
+    if (invoice == null) {
         Text("No image found.")
         return
     }
@@ -261,13 +272,14 @@ fun DetailScreen(imageUri: String?, navController: NavHostController) {
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
         ) {
             Image(
-                painter = rememberAsyncImagePainter(Uri.decode(imageUri)),
+                painter = rememberAsyncImagePainter(invoice.uri),
                 contentDescription = "Invoice image",
                 modifier = Modifier.weight(1f)
             )
             Spacer(modifier = Modifier.height(16.dp))
+            Text(text = "Uploaded: ${invoice.uploadDate}")
             Button(onClick = {
-                removeInvoiceItems(context, listOf(Uri.decode(imageUri)))
+                removeInvoiceItems(context, listOf(invoice.id))
                 navController.popBackStack()
             }) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete")
