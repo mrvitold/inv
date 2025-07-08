@@ -54,6 +54,7 @@ import java.util.Date
 import java.util.Locale
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.sp
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
@@ -93,12 +94,21 @@ fun getInvoiceItems(context: Context): List<InvoiceItem> {
     val list = JSONArray(listJson)
     val result = mutableListOf<InvoiceItem>()
     for (i in 0 until list.length()) {
-        val obj = list.getJSONObject(i)
-        result.add(InvoiceItem(
-            obj.optString("id", System.currentTimeMillis().toString()),
-            obj.getString("uri"),
-            obj.getString("uploadDate")
-        ))
+        val entry = list.get(i)
+        if (entry is JSONObject) {
+            result.add(InvoiceItem(
+                entry.optString("id", System.currentTimeMillis().toString()),
+                entry.getString("uri"),
+                entry.getString("uploadDate")
+            ))
+        } else if (entry is String) {
+            // Old format: just a URI string
+            result.add(InvoiceItem(
+                System.currentTimeMillis().toString(),
+                entry,
+                "(unknown)"
+            ))
+        }
     }
     return result
 }
@@ -168,6 +178,10 @@ fun GalleryScreen(navController: NavHostController) {
     var invoiceItems by remember { mutableStateOf(getInvoiceItems(context)) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    // Count occurrences of each URI
+    val uriCounts = remember(invoiceItems) {
+        invoiceItems.groupingBy { it.uri }.eachCount()
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -243,7 +257,17 @@ fun GalleryScreen(navController: NavHostController) {
                                         .size(64.dp)
                                         .padding(end = 16.dp)
                                 )
-                                Text(text = "Uploaded: ${item.uploadDate}")
+                                Column {
+                                    Text(text = "Uploaded: ${item.uploadDate}")
+                                    if ((uriCounts[item.uri] ?: 0) > 1) {
+                                        Text(
+                                            text = "duplicated",
+                                            color = androidx.compose.ui.graphics.Color.Red,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
