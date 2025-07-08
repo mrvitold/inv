@@ -59,6 +59,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import com.google.accompanist.pager.ExperimentalPagerApi
 import com.google.accompanist.pager.HorizontalPager
 import com.google.accompanist.pager.rememberPagerState
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
+import java.util.UUID
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
@@ -71,7 +76,7 @@ fun saveInvoiceItem(context: Context, uri: String) {
     val list = JSONArray(listJson)
     val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date())
     val obj = JSONObject()
-    obj.put("id", System.currentTimeMillis().toString())
+    obj.put("id", UUID.randomUUID().toString())
     obj.put("uri", uri)
     obj.put("uploadDate", date)
     list.put(obj)
@@ -98,20 +103,25 @@ fun getInvoiceItems(context: Context): List<InvoiceItem> {
     val list = JSONArray(listJson)
     val result = mutableListOf<InvoiceItem>()
     for (i in 0 until list.length()) {
-        val entry = list.get(i)
-        if (entry is JSONObject) {
-            result.add(InvoiceItem(
-                entry.optString("id", System.currentTimeMillis().toString()),
-                entry.getString("uri"),
-                entry.getString("uploadDate")
-            ))
-        } else if (entry is String) {
-            // Old format: just a URI string
-            result.add(InvoiceItem(
-                System.currentTimeMillis().toString(),
-                entry,
-                "(unknown)"
-            ))
+        try {
+            val entry = list.get(i)
+            if (entry is JSONObject) {
+                result.add(InvoiceItem(
+                    entry.optString("id", System.currentTimeMillis().toString()),
+                    entry.optString("uri", ""),
+                    entry.optString("uploadDate", "(unknown)")
+                ))
+            } else if (entry is String) {
+                // Old format: just a URI string
+                result.add(InvoiceItem(
+                    System.currentTimeMillis().toString(),
+                    entry,
+                    "(unknown)"
+                ))
+            } // else: skip invalid entry
+        } catch (e: Exception) {
+            // Skip invalid/corrupted entry
+            continue
         }
     }
     return result
@@ -179,7 +189,7 @@ fun MainScreen(navController: NavHostController) {
 @Composable
 fun GalleryScreen(navController: NavHostController) {
     val context = LocalContext.current
-    var invoiceItems by remember { mutableStateOf(getInvoiceItems(context)) }
+    var invoiceItems by remember { mutableStateOf(getInvoiceItems(context).filter { it.uri.isNotBlank() }) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     // Count occurrences of each URI
@@ -219,7 +229,7 @@ fun GalleryScreen(navController: NavHostController) {
                         confirmButton = {
                             Button(onClick = {
                                 removeInvoiceItems(context, selectedIds.toList())
-                                invoiceItems = getInvoiceItems(context)
+                                invoiceItems = getInvoiceItems(context).filter { it.uri.isNotBlank() }
                                 selectedIds = emptySet()
                                 showDeleteDialog = false
                             }) { Text("Delete") }
@@ -285,9 +295,25 @@ fun GalleryScreen(navController: NavHostController) {
 @Composable
 fun DetailScreen(invoiceId: String?, navController: NavHostController) {
     val context = LocalContext.current
-    val invoiceItems = getInvoiceItems(context)
+    var invoiceItems by remember { mutableStateOf(getInvoiceItems(context).filter { it.uri.isNotBlank() }) }
     val startIndex = invoiceItems.indexOfFirst { it.id == invoiceId }.coerceAtLeast(0)
     val pagerState = rememberPagerState(initialPage = startIndex)
+    // Count occurrences of each URI
+    val uriCounts = remember(invoiceItems) {
+        invoiceItems.groupingBy { it.uri }.eachCount()
+    }
+    // Handle out-of-bounds after deletion
+    if (invoiceItems.isEmpty()) {
+        // If all items deleted, go back to gallery
+        LaunchedEffect(Unit) { navController.popBackStack() }
+        return
+    }
+    if (pagerState.currentPage >= invoiceItems.size) {
+        // If current page is out of bounds, move to last page
+        LaunchedEffect(invoiceItems.size) {
+            pagerState.scrollToPage(invoiceItems.size - 1)
+        }
+    }
     Scaffold(
         topBar = { TopAppBar(title = { Text("Invoice Detail") }) }
     ) { innerPadding ->
@@ -319,10 +345,18 @@ fun DetailScreen(invoiceId: String?, navController: NavHostController) {
                         .padding(bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    if ((uriCounts[currentInvoice.uri] ?: 0) > 1) {
+                        Text(
+                            text = "duplicated",
+                            color = androidx.compose.ui.graphics.Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                    }
                     Text(text = "Uploaded: ${currentInvoice.uploadDate}")
                     Button(onClick = {
                         removeInvoiceItems(context, listOf(currentInvoice.id))
-                        navController.popBackStack()
+                        invoiceItems = getInvoiceItems(context).filter { it.uri.isNotBlank() }
                     }, modifier = Modifier.padding(top = 8.dp)) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                         Text("Delete Invoice")
