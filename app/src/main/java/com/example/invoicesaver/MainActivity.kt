@@ -64,6 +64,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import java.util.UUID
+import androidx.compose.foundation.layout.statusBarsPadding
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
@@ -210,7 +211,8 @@ fun GalleryScreen(navController: NavHostController) {
                                 .padding(12.dp)
                         )
                     }
-                }
+                },
+                modifier = Modifier.statusBarsPadding()
             )
         }
     ) { innerPadding ->
