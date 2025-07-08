@@ -54,6 +54,8 @@ dependencies {
     implementation("androidx.compose.material:material:1.6.1")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.4.0")
+    implementation("com.google.accompanist:accompanist-pager:0.34.0")
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.34.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

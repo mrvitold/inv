@@ -56,6 +56,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.navigationBarsPadding
+import com.google.accompanist.pager.ExperimentalPagerApi
+import com.google.accompanist.pager.HorizontalPager
+import com.google.accompanist.pager.rememberPagerState
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
@@ -278,14 +281,13 @@ fun GalleryScreen(navController: NavHostController) {
     }
 }
 
+@OptIn(ExperimentalPagerApi::class)
 @Composable
 fun DetailScreen(invoiceId: String?, navController: NavHostController) {
     val context = LocalContext.current
-    val invoice = getInvoiceItems(context).find { it.id == invoiceId }
-    if (invoice == null) {
-        Text("No image found.")
-        return
-    }
+    val invoiceItems = getInvoiceItems(context)
+    val startIndex = invoiceItems.indexOfFirst { it.id == invoiceId }.coerceAtLeast(0)
+    val pagerState = rememberPagerState(initialPage = startIndex)
     Scaffold(
         topBar = { TopAppBar(title = { Text("Invoice Detail") }) }
     ) { innerPadding ->
@@ -296,25 +298,35 @@ fun DetailScreen(invoiceId: String?, navController: NavHostController) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween
         ) {
-            Image(
-                painter = rememberAsyncImagePainter(invoice.uri),
-                contentDescription = "Invoice image",
+            HorizontalPager(
+                count = invoiceItems.size,
+                state = pagerState,
                 modifier = Modifier.weight(1f)
-            )
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .navigationBarsPadding()
-                    .padding(bottom = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(text = "Uploaded: ${invoice.uploadDate}")
-                Button(onClick = {
-                    removeInvoiceItems(context, listOf(invoice.id))
-                    navController.popBackStack()
-                }, modifier = Modifier.padding(top = 8.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete")
-                    Text("Delete Invoice")
+            ) { page ->
+                val invoice = invoiceItems[page]
+                Image(
+                    painter = rememberAsyncImagePainter(invoice.uri),
+                    contentDescription = "Invoice image",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            val currentInvoice = invoiceItems.getOrNull(pagerState.currentPage)
+            if (currentInvoice != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(bottom = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(text = "Uploaded: ${currentInvoice.uploadDate}")
+                    Button(onClick = {
+                        removeInvoiceItems(context, listOf(currentInvoice.id))
+                        navController.popBackStack()
+                    }, modifier = Modifier.padding(top = 8.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Text("Delete Invoice")
+                    }
                 }
             }
         }
