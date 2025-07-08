@@ -1,0 +1,19 @@
+versionalization and backups (git)
+mulptiple invoice selection
+swipe opened invoice photos in gallery to see previous or next invoice
+zoom scnanned invoice and move zoom screen 
+logo and splash screen
+add label "date uploaded" in the list in the gallery
+ability to upload PDF, with multiple pages //App need to read separate invoices in one PDF later//
+---
+READ DATA FROM SVANNED INVOIVES
+---
+GENERATE TABLES FROM SCANS AND GENERATE EXCEL FILE
+---
+DESIGN AND UX
+---
+BACKUP AND TRANSFER TRAINED READING MODEL TO OTHER DEVICES
+---
+*CONNECT WITH VMI TO HAVE READY TO UPLOAD XML FILE
+---
+*UPLOAD TO GOOGLE PLAYSTORE
