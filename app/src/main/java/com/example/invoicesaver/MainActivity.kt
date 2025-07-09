@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import java.util.UUID
 import androidx.compose.foundation.layout.statusBarsPadding
+import android.content.Intent
 
 private const val PREFS_NAME = "invoice_prefs"
 private const val KEY_IMAGE_LIST = "image_list"
@@ -157,6 +158,11 @@ fun MainScreen(navController: NavHostController) {
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
             uris.forEach { uri ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: SecurityException) {
+                    // Ignore if already granted or not needed
+                }
                 saveInvoiceItem(context, uri.toString())
             }
             Toast.makeText(context, "${uris.size} invoice(s) uploaded!", Toast.LENGTH_SHORT).show()
@@ -198,6 +204,7 @@ fun GalleryScreen(navController: NavHostController) {
         invoiceItems.groupingBy { it.uri }.eachCount()
     }
     Scaffold(
+        modifier = Modifier.statusBarsPadding(),
         topBar = {
             TopAppBar(
                 title = { Text("Gallery") },
@@ -211,8 +218,7 @@ fun GalleryScreen(navController: NavHostController) {
                                 .padding(12.dp)
                         )
                     }
-                },
-                modifier = Modifier.statusBarsPadding()
+                }
             )
         }
     ) { innerPadding ->
@@ -304,6 +310,7 @@ fun DetailScreen(invoiceId: String?, navController: NavHostController) {
     val uriCounts = remember(invoiceItems) {
         invoiceItems.groupingBy { it.uri }.eachCount()
     }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     // Handle out-of-bounds after deletion
     if (invoiceItems.isEmpty()) {
         // If all items deleted, go back to gallery
@@ -356,14 +363,28 @@ fun DetailScreen(invoiceId: String?, navController: NavHostController) {
                         )
                     }
                     Text(text = "Uploaded: ${currentInvoice.uploadDate}")
-                    Button(onClick = {
-                        removeInvoiceItems(context, listOf(currentInvoice.id))
-                        invoiceItems = getInvoiceItems(context).filter { it.uri.isNotBlank() }
-                    }, modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { showDeleteDialog = true }, modifier = Modifier.padding(top = 8.dp)) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete")
                         Text("Delete Invoice")
                     }
                 }
+            }
+            if (showDeleteDialog && currentInvoice != null) {
+                androidx.compose.material.AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = { Text("Delete invoice?") },
+                    text = { Text("Are you sure you want to delete this invoice?") },
+                    confirmButton = {
+                        Button(onClick = {
+                            removeInvoiceItems(context, listOf(currentInvoice.id))
+                            invoiceItems = getInvoiceItems(context).filter { it.uri.isNotBlank() }
+                            showDeleteDialog = false
+                        }) { Text("Delete") }
+                    },
+                    dismissButton = {
+                        Button(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+                    }
+                )
             }
         }
     }
